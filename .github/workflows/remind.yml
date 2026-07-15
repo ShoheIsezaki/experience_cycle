@@ -1,0 +1,37 @@
+name: Daily reminder
+
+on:
+  schedule:
+    # 毎日 21:30 JST = 12:30 UTC
+    - cron: '30 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord reminder
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL is not set. Skipping reminder."
+            exit 0
+          fi
+
+          MESSAGE=$'📘 **今日の経験学習サイクルを記録しましょう**\n今日やったこと・気づき・次の一歩を振り返る時間です。\nhttps://shoheisezaki.github.io/experience_cycle/'
+
+          # jq でJSONを安全に組み立てて送信
+          PAYLOAD=$(jq -n --arg content "$MESSAGE" '{content: $content}')
+
+          HTTP_CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -X POST \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL")
+
+          echo "Discord responded with HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "Failed to send reminder."
+            exit 1
+          fi

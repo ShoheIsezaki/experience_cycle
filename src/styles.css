@@ -1,0 +1,734 @@
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #eef1f7;
+  --text: #1f2530;
+  --text-muted: #6b7280;
+  --text-faint: #9aa2b1;
+  --primary: #4f7cff;
+  --primary-ink: #ffffff;
+  --border: #e3e7ef;
+  --danger: #e5484d;
+  --shadow: 0 2px 10px rgba(31, 37, 48, 0.06);
+  --nav-h: 58px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --maxw: 620px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI',
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button,
+textarea,
+input {
+  font-family: inherit;
+  font-size: 16px; /* iOSでの自動ズーム防止 */
+}
+
+button {
+  cursor: pointer;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* ---- layout ---- */
+.app {
+  min-height: 100dvh;
+}
+
+.app-main {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: calc(var(--safe-top) + 12px) 14px calc(var(--nav-h) + var(--safe-bottom) + 20px);
+}
+
+.page {
+  animation: fade 0.18s ease;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page-header__title {
+  font-size: 20px;
+  margin: 4px 0 16px;
+}
+
+.section-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+/* ---- bottom nav ---- */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  display: flex;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--border);
+  z-index: 50;
+}
+
+.bottom-nav__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav__item.is-active {
+  color: var(--primary);
+}
+
+.bottom-nav__icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ---- record page ---- */
+.record-header {
+  margin-bottom: 14px;
+}
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-nav__btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.date-nav__center {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+}
+
+.date-nav__display {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.date-nav__today {
+  font-size: 11px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* 透明な日付入力を重ねてタップでピッカー起動 */
+.date-nav__input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+}
+
+.record-weather {
+  margin-bottom: 18px;
+}
+
+.weather-picker {
+  display: flex;
+  gap: 8px;
+}
+
+.weather-picker__btn {
+  flex: 1;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.08s ease, border-color 0.1s ease, background 0.1s ease;
+}
+
+.weather-picker__btn:active {
+  transform: scale(0.94);
+}
+
+.weather-picker__btn.is-selected {
+  border-color: var(--primary);
+  background: #eaf0ff;
+  box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.35) inset;
+}
+
+.weather-picker__emoji {
+  font-size: 26px;
+  line-height: 1;
+  filter: grayscale(0.35);
+  opacity: 0.7;
+}
+
+.weather-picker__btn.is-selected .weather-picker__emoji {
+  filter: none;
+  opacity: 1;
+}
+
+/* ---- step cards ---- */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.step-card__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.step-card__no {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.step-card__titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-card__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.step-card__subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.step-card__textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.step-card__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.save-status {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+  min-height: 20px;
+}
+
+.save-status__saving {
+  color: var(--text-muted);
+}
+.save-status__saved {
+  color: #2e9e5b;
+  font-weight: 700;
+}
+.save-status__hint {
+  color: var(--text-faint);
+}
+
+/* ---- month / week nav ---- */
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.month-nav__btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.month-nav__title {
+  flex: 1;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.month-nav__badge {
+  font-size: 11px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* ---- calendar ---- */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-grid--head {
+  margin-bottom: 6px;
+}
+
+.calendar-head-cell {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+  font-weight: 600;
+}
+
+.calendar-cell {
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 4px 2px;
+  gap: 2px;
+}
+
+.calendar-cell.is-outside {
+  background: transparent;
+  border-color: transparent;
+}
+
+.calendar-cell.is-outside .calendar-cell__num {
+  color: var(--text-faint);
+}
+
+.calendar-cell.has-entry {
+  border-color: #c9d6ff;
+}
+
+.calendar-cell.is-today {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1.5px var(--primary) inset;
+}
+
+.calendar-cell__num {
+  font-size: 12px;
+  color: var(--text-muted);
+  align-self: flex-start;
+  margin-left: 4px;
+}
+
+.calendar-cell__weather {
+  font-size: 20px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+/* ---- week list ---- */
+.week-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.week-day {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  display: block;
+}
+
+.week-day.is-empty {
+  opacity: 0.55;
+  box-shadow: none;
+  background: transparent;
+}
+
+.week-day.is-today {
+  border-color: var(--primary);
+}
+
+.week-day__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.week-day__date {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.week-day__weather {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.week-day__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.week-day__field {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.week-day__field-title {
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.week-day__field-text {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.week-day__note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---- bottom sheet ---- */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 33, 0.4);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade 0.15s ease;
+}
+
+.sheet {
+  width: 100%;
+  max-width: var(--maxw);
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 16px calc(var(--safe-bottom) + 16px);
+  max-height: 82dvh;
+  overflow-y: auto;
+  animation: sheet-up 0.22s ease;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.sheet__handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 6px auto 12px;
+}
+
+.sheet__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sheet__title {
+  font-size: 17px;
+  margin: 0;
+}
+
+.sheet__weather {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.sheet__close {
+  border: none;
+  background: var(--surface-2);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.sheet__empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px 0;
+}
+
+.sheet__item-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.sheet__item-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sheet__item-text.is-empty {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.sheet__edit-btn {
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 14px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ---- settings ---- */
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+
+.settings-section__title {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.settings-count {
+  font-size: 15px;
+  margin: 0 0 14px;
+}
+
+.settings-message {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--primary);
+  background: #eaf0ff;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.settings-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.settings-cycle {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  line-height: 1.9;
+  font-size: 14px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.btn--primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+}
+
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.btn:last-child {
+  margin-bottom: 0;
+}
+
+.import-confirm {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.import-confirm__q {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.import-confirm__actions {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- dark mode ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171d;
+    --surface: #1e222b;
+    --surface-2: #262b35;
+    --text: #e8ebf1;
+    --text-muted: #a3acbd;
+    --text-faint: #6d7688;
+    --border: #313743;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .bottom-nav {
+    background: rgba(30, 34, 43, 0.92);
+  }
+
+  .weather-picker__btn.is-selected {
+    background: #26325a;
+  }
+
+  .settings-message {
+    background: #26325a;
+  }
+
+  .calendar-cell.has-entry {
+    border-color: #3a4a7a;
+  }
+}
