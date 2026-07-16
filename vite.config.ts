@@ -47,6 +47,16 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Supabase を別チャンクに分離し、メインバンドルの肥大化を避ける
+        manualChunks: {
+          supabase: ['@supabase/supabase-js'],
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

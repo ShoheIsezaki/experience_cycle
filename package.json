@@ -13,6 +13,7 @@
     "gen:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.7",
     "dexie": "^4.0.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

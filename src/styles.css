@@ -635,6 +635,11 @@ button {
   border-radius: 10px;
 }
 
+.settings-message.is-error {
+  color: #b42318;
+  background: #fdecea;
+}
+
 .settings-desc {
   font-size: 14px;
   line-height: 1.7;
@@ -726,6 +731,11 @@ button {
 
   .settings-message {
     background: #26325a;
+  }
+
+  .settings-message.is-error {
+    color: #ffb4ab;
+    background: #4a1f1a;
   }
 
   .calendar-cell.has-entry {

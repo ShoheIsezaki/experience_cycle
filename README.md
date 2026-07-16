@@ -1,6 +1,6 @@
 # 経験学習サイクル (experience_cycle)
 
-デービッド・コルブの **経験学習モデル** を毎日記録するための、シンプルなPWA（プログレッシブ・ウェブアプリ）です。iPhone の Safari で開き、ホーム画面に追加してアプリのように使えます。データは端末内（IndexedDB）にのみ保存され、サーバー送信もログインもありません。
+デービッド・コルブの **経験学習モデル** を毎日記録するための、シンプルなPWA（プログレッシブ・ウェブアプリ）です。iPhone の Safari で開き、ホーム画面に追加してアプリのように使えます。データは既定では端末内（IndexedDB）にのみ保存されます。任意で **Google ログインによるクラウド同期（Supabase）** を設定すると、複数端末・複数ブラウザ間で記録を同期できます（未設定なら従来どおりローカルのみで全機能が動作します）。
 
 公開URL: https://shoheisezaki.github.io/experience_cycle/
 
@@ -88,16 +88,42 @@ Secret が未設定の場合、リマインドの workflow は失敗せずにス
 
 - Vite + React + TypeScript
 - PWA: `vite-plugin-pwa`（manifest / Service Worker / オフライン対応 / iOS向けメタタグ）
-- データ保存: IndexedDB（`Dexie.js`）— サーバー・ログインなし
+- データ保存: IndexedDB（`Dexie.js`）。任意でクラウド同期（`Supabase` + Google OAuth PKCE）
 - ルーティング: `react-router-dom`（`HashRouter`。GitHub Pages でのリロード404を回避）
 - スタイル: プレーンCSS（UIライブラリ不使用）。ダークモード対応
 - テスト: Vitest（日付ユーティリティ・週計算・エクスポート/インポートのシリアライズ）
 
 ## データについて
 
-- 記録はこの端末のブラウザ内（IndexedDB）にのみ保存されます。
+- 記録はこの端末のブラウザ内（IndexedDB）に保存されます。クラウド同期を設定してログインすると、Supabase 経由で複数端末と同期されます。
 - 機種変更やデータ移行の際は、設定画面から **JSONエクスポート** し、移行先で **JSONインポート** してください。
 - インポートは「マージ（日付ごとに新しい方を優先）」または「上書き（既存を全消去）」を選べます。
+
+## クラウド同期のセットアップ（任意）
+
+Google ログインでクラウド同期を有効にするには、以下を設定します。**未設定でもアプリはローカルのみで完全に動作します**（設定画面には「クラウド同期は未設定です」と表示されます）。
+
+1. **Supabase プロジェクトを作成**: [supabase.com](https://supabase.com/) で無料プロジェクトを作成します。**Project Settings → API** から **Project URL** と **anon public key** を控えます。
+2. **Google OAuth クライアントを作成**: [Google Cloud Console](https://console.cloud.google.com/) の **APIとサービス → 認証情報** で OAuth 2.0 クライアント ID（種類: ウェブアプリケーション）を作成します。**承認済みのリダイレクト URI** に次を追加します。
+   ```
+   https://<project-ref>.supabase.co/auth/v1/callback
+   ```
+   （`<project-ref>` は Supabase の Project URL のサブドメイン部分）。作成後の **クライアント ID** と **クライアントシークレット** を控えます。
+3. **Supabase で Google を有効化**: Supabase の **Authentication → Providers → Google** を有効化し、上のクライアント ID / シークレットを入力して保存します。
+4. **URL 設定**: Supabase の **Authentication → URL Configuration** で、**Site URL** を `https://shoheisezaki.github.io/experience_cycle/` に設定し、**Redirect URLs** にも同じ URL を追加します。
+5. **スキーマを作成**: Supabase の **SQL Editor** で、このリポジトリの [`supabase/schema.sql`](supabase/schema.sql) の内容を実行します（`entries` テーブルと RLS ポリシーが作成されます）。
+6. **GitHub に接続情報を登録**: リポジトリの **Settings → Secrets and variables → Actions → Variables**（Secrets ではなく **Variables**）に、次の2つの **Repository variables** を登録します。
+   - `VITE_SUPABASE_URL` = Supabase の Project URL
+   - `VITE_SUPABASE_ANON_KEY` = Supabase の anon public key
+7. **再デプロイ**: `Deploy to GitHub Pages` ワークフローを再実行（または `main` に push）すると、接続情報がビルドに埋め込まれ、クラウド同期が有効になります。
+
+> **anon key の公開について**: anon key はクライアントに埋め込まれ公開されますが、これは設計上安全です。全アクセスは Row Level Security（RLS）で保護されており、各ユーザーは自分の行（`auth.uid() = user_id`）以外を読み書きできません。
+
+### 同期の仕組み
+
+- 書き込みはログイン中に即時クラウドへ反映（write-through）されます。失敗しても致命的ではなく、次回のフル同期が差分を修復します。
+- フル同期は、アプリ起動時（セッションあり）・ログイン成立時・オンライン復帰時・「今すぐ同期」ボタン・インポート適用後に実行されます。
+- 競合は **updatedAt が新しい方を採用（Last-Write-Wins）** で解決します。削除は「空の記録（トンボストーン）」として同期され、端末間で伝播します。
 
 ## ライセンス
 

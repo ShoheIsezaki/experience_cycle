@@ -1,8 +1,118 @@
 import { useEffect, useRef, useState } from 'react';
-import { countEntries, db, getAllEntries } from '../db';
+import { countEntries, db, emptyEntry, getAllEntries, getAllEntriesRaw, isEntryEmpty } from '../db';
 import { mergeEntries, parseBackup, serializeBackup, type MergeStrategy } from '../utils/backup';
 import { todayStr } from '../utils/date';
 import type { DailyEntry } from '../types';
+import { cloudConfigured, redirectTo, supabase } from '../lib/supabase';
+import { useAuth } from '../lib/useAuth';
+import { fullSync, getLastSyncedAt } from '../lib/sync';
+
+type SyncState = 'idle' | 'syncing' | 'error';
+
+function AccountSection() {
+  const { user, loading } = useAuth();
+  const [syncState, setSyncState] = useState<SyncState>('idle');
+  const [syncMsg, setSyncMsg] = useState<string>('');
+  const [lastSynced, setLastSynced] = useState<string | null>(getLastSyncedAt());
+
+  const runSync = async (uid: string) => {
+    setSyncState('syncing');
+    setSyncMsg('');
+    try {
+      const result = await fullSync(uid);
+      if (result) {
+        setSyncMsg(`同期しました（取込 ${result.pulled}件 / 送信 ${result.pushed}件）。`);
+      }
+      setLastSynced(getLastSyncedAt());
+      setSyncState('idle');
+    } catch (err) {
+      setSyncState('error');
+      setSyncMsg(err instanceof Error ? err.message : '同期に失敗しました。');
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!supabase) return;
+    setSyncMsg('');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: redirectTo() },
+    });
+    if (error) {
+      setSyncState('error');
+      setSyncMsg(error.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setSyncMsg('ログアウトしました。ローカルの記録は端末に残っています。');
+    setSyncState('idle');
+  };
+
+  // 未設定
+  if (!cloudConfigured) {
+    return (
+      <section className="settings-section">
+        <h2 className="settings-section__title">アカウントと同期</h2>
+        <p className="settings-desc">
+          クラウド同期は未設定です（README のセットアップ手順を参照してください）。
+          設定しない場合も、記録はこの端末内に保存され全機能が利用できます。
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="settings-section">
+      <h2 className="settings-section__title">アカウントと同期</h2>
+
+      {loading ? (
+        <p className="settings-desc">読み込み中…</p>
+      ) : user ? (
+        <>
+          <p className="settings-desc">
+            ログイン中: <strong>{user.email ?? user.id}</strong>
+          </p>
+          <p className="settings-desc">
+            最終同期:{' '}
+            {lastSynced ? new Date(lastSynced).toLocaleString('ja-JP') : '未同期'}
+          </p>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => runSync(user.id)}
+            disabled={syncState === 'syncing'}
+          >
+            {syncState === 'syncing' ? '同期中…' : '今すぐ同期'}
+          </button>
+          <button type="button" className="btn" onClick={handleLogout}>
+            ログアウト
+          </button>
+          <p className="settings-desc">
+            ログアウトしても、この端末のローカルデータは削除されません。
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="settings-desc">
+            Google でログインすると、複数の端末やブラウザ間で記録を同期できます。
+          </p>
+          <button type="button" className="btn btn--primary" onClick={handleLogin}>
+            Googleでログイン
+          </button>
+        </>
+      )}
+
+      {syncMsg && (
+        <p className={'settings-message' + (syncState === 'error' ? ' is-error' : '')}>
+          {syncMsg}
+        </p>
+      )}
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const [count, setCount] = useState<number | null>(null);
@@ -54,19 +164,37 @@ export default function SettingsPage() {
 
   const applyImport = async (strategy: MergeStrategy) => {
     if (!pending) return;
-    const existing = await getAllEntries();
-    const merged = mergeEntries(existing, pending, strategy);
+    // 既存との統合はトンボストーン込みの raw を使う（削除情報を失わないため）
+    const existing = await getAllEntriesRaw();
+    let merged = mergeEntries(existing, pending, strategy);
+    if (strategy === 'overwrite') {
+      // 上書きで消えた既存日付はトンボストーン化してクラウドにも削除を伝播させる
+      // （単に消すだけだと次回同期でクラウドから復活してしまう）
+      const kept = new Set(pending.map((e) => e.date));
+      const now = new Date().toISOString();
+      const tombstones = existing
+        .filter((e) => !kept.has(e.date) && !isEntryEmpty(e))
+        .map((e) => ({ ...emptyEntry(e.date), updatedAt: now }));
+      merged = [...merged, ...tombstones];
+    }
     await db.transaction('rw', db.entries, async () => {
       await db.entries.clear();
       await db.entries.bulkPut(merged);
     });
     setPending(null);
     await refreshCount();
+    const imported = merged.filter((e) => !isEntryEmpty(e)).length;
     setMessage(
       strategy === 'overwrite'
-        ? `上書きインポートが完了しました（${merged.length}件）。`
-        : `マージインポートが完了しました（${merged.length}件）。`,
+        ? `上書きインポートが完了しました（${imported}件）。`
+        : `マージインポートが完了しました（${imported}件）。`,
     );
+    // ログイン中ならインポート結果をクラウドへ反映
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (uid) void fullSync(uid).catch(() => {});
+    }
   };
 
   return (
@@ -74,6 +202,8 @@ export default function SettingsPage() {
       <header className="page-header">
         <h1 className="page-header__title">設定</h1>
       </header>
+
+      <AccountSection />
 
       <section className="settings-section">
         <h2 className="settings-section__title">データ</h2>
@@ -148,9 +278,10 @@ export default function SettingsPage() {
       <section className="settings-section">
         <h2 className="settings-section__title">このアプリについて</h2>
         <p className="settings-desc">
-          データはこの端末のブラウザ内（IndexedDB）だけに保存されます。
-          サーバー送信やログインはありません。機種変更やデータ移行の際は、
-          エクスポートしたJSONをインポートしてください。
+          データはこの端末のブラウザ内（IndexedDB）に保存されます。Google でログインすると、
+          クラウド（Supabase）経由で複数端末と同期できます。ログインしない場合は
+          サーバー送信は行われず、端末内のみで動作します。機種変更やデータ移行の際は、
+          エクスポートしたJSONをインポートすることもできます。
         </p>
       </section>
     </div>

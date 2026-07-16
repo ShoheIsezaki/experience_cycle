@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { DailyEntry } from './types';
+import { pushEntry } from './lib/sync';
 
 export class ExperienceCycleDB extends Dexie {
   entries!: Table<DailyEntry, string>;
@@ -44,8 +45,11 @@ export function emptyEntry(date: string): DailyEntry {
 }
 
 /**
- * エントリを保存する。全項目が空ならレコードを削除する。
- * 返り値は「保存された（true）／削除された（false）」。
+ * エントリを保存する。
+ * 全項目が空でもレコードは削除せず「空のまま put」してトンボストーン化する
+ * （更新時刻付きの空エントリ＝削除、として同期で伝播させるため）。
+ * ログイン中ならクラウドへ write-through（失敗しても致命的でない）。
+ * 返り値は「本文または天気を含む有効なエントリか（true）／空エントリか（false）」。
  */
 export async function saveEntry(entry: DailyEntry): Promise<boolean> {
   const normalized: DailyEntry = {
@@ -56,32 +60,45 @@ export async function saveEntry(entry: DailyEntry): Promise<boolean> {
     nextAction: entry.nextAction.trim(),
     updatedAt: new Date().toISOString(),
   };
-  if (isEntryEmpty(normalized)) {
-    await db.entries.delete(normalized.date);
-    return false;
-  }
   await db.entries.put(normalized);
-  return true;
+  // ログイン中なら即時同期（fire-and-forget。失敗は次回 fullSync が自己修復）
+  void pushEntry(normalized);
+  return !isEntryEmpty(normalized);
 }
 
-/** 指定日付のエントリを取得（なければ undefined） */
+/** 指定日付のエントリを取得（空エントリ＝存在しない扱いで undefined） */
 export async function getEntry(date: string): Promise<DailyEntry | undefined> {
-  return db.entries.get(date);
+  const row = await db.entries.get(date);
+  if (!row || isEntryEmpty(row)) return undefined;
+  return row;
 }
 
-/** 指定した日付配列に対応するエントリを一括取得（Map で返す） */
+/**
+ * 指定した日付配列に対応するエントリを一括取得（Map で返す）。
+ * 空エントリ（トンボストーン）は除外する。
+ */
 export async function getEntriesForDates(dates: string[]): Promise<Map<string, DailyEntry>> {
   const rows = await db.entries.where('date').anyOf(dates).toArray();
-  return new Map(rows.map((r) => [r.date, r]));
+  return new Map(rows.filter((r) => !isEntryEmpty(r)).map((r) => [r.date, r]));
 }
 
-/** 全エントリを日付昇順で取得 */
+/** 全エントリを日付昇順で取得（空エントリは除外） */
 export async function getAllEntries(): Promise<DailyEntry[]> {
+  const rows = await db.entries.toArray();
+  return rows.filter((r) => !isEntryEmpty(r)).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * 全エントリを日付昇順で取得（トンボストーン込みの生データ）。
+ * 同期・インポートのマージ用。表示には getAllEntries を使うこと。
+ */
+export async function getAllEntriesRaw(): Promise<DailyEntry[]> {
   const rows = await db.entries.toArray();
   return rows.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** 総レコード数 */
+/** 総レコード数（空エントリを除外した実件数） */
 export async function countEntries(): Promise<number> {
-  return db.entries.count();
+  const rows = await db.entries.toArray();
+  return rows.filter((r) => !isEntryEmpty(r)).length;
 }

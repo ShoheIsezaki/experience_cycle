@@ -4,8 +4,12 @@ import RecordPage from './pages/RecordPage';
 import CalendarPage from './pages/CalendarPage';
 import WeekPage from './pages/WeekPage';
 import SettingsPage from './pages/SettingsPage';
+import { useAuth } from './lib/useAuth';
 
 export default function App() {
+  // アプリ全体で認証状態を購読する。どの画面にいても
+  // 起動時・ログイン成立時・オンライン復帰時のクラウド同期が動くようにする
+  useAuth();
   return (
     <div className="app">
       <main className="app-main">
