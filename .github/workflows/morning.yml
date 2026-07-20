@@ -1,0 +1,64 @@
+name: Morning theme reminder
+
+on:
+  schedule:
+    # 毎朝 8:30 JST = 前日 23:30 UTC
+    - cron: '30 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  morning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord morning reminder
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL is not set. Skipping morning reminder."
+            exit 0
+          fi
+
+          THEME=""
+          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -n "$SUPABASE_URL" ]; then
+            # TZ=Asia/Tokyo date +%u は 1=月..7=日。テーマの weekday は 0=月..6=日。
+            DOW=$(TZ=Asia/Tokyo date +%u)
+            WD=$((DOW - 1))
+            echo "Fetching theme for weekday=$WD (JST)."
+
+            # service role key はヘッダでのみ使用しログには出さない
+            RESPONSE=$(curl -sS \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/rest/v1/weekday_themes?weekday=eq.$WD&select=theme")
+
+            # 最初の非空テーマを取り出す（単一ユーザー前提）
+            THEME=$(printf '%s' "$RESPONSE" | jq -r '
+              [ .[]?.theme ] | map(select(. != null and . != "")) | .[0] // empty
+            ' 2>/dev/null || echo "")
+          else
+            echo "Supabase not configured (service role key / URL missing). Sending generic message."
+          fi
+
+          if [ -n "$THEME" ]; then
+            MESSAGE="☀️ おはようございます！今日も1日「${THEME}」を意識して頑張りましょう！"
+          else
+            MESSAGE="☀️ おはようございます！今日も1日頑張りましょう！"
+          fi
+
+          # jq でJSONを安全に組み立てて送信
+          PAYLOAD=$(jq -n --arg content "$MESSAGE" '{content: $content}')
+
+          HTTP_CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -X POST \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL")
+
+          echo "Discord responded with HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "Failed to send morning reminder."
+            exit 1
+          fi

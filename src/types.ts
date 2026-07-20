@@ -21,6 +21,19 @@ export interface DailyEntry {
   updatedAt: string;
 }
 
+/**
+ * 曜日ごとに意識する「テーマ」（自由テキスト）。
+ * weekday は 0=月曜..6=日曜（週表示・カレンダーと揃える）。
+ */
+export interface WeekdayTheme {
+  /** 0=月..6=日 */
+  weekday: number;
+  /** テーマ本文（trim 済み。空文字はトンボストーン＝未設定として同期伝播） */
+  theme: string;
+  /** 最終更新時刻（ISO文字列） */
+  updatedAt: string;
+}
+
 export const WEATHER_OPTIONS: { value: Weather; emoji: string; label: string }[] = [
   { value: 1, emoji: '☀️', label: '快晴' },
   { value: 2, emoji: '🌤', label: '晴れ' },

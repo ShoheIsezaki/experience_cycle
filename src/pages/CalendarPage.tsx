@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getEntriesForDates } from '../db';
+import { getEntriesForDates, getThemes } from '../db';
 import type { DailyEntry } from '../types';
 import { WEATHER_OPTIONS } from '../types';
 import {
@@ -10,6 +10,7 @@ import {
   getYear,
   todayStr,
 } from '../utils/date';
+import { groupThemeSpans } from '../utils/theme';
 import EntrySheet from '../components/EntrySheet';
 
 const WEEK_HEADERS = ['月', '火', '水', '木', '金', '土', '日'];
@@ -23,6 +24,7 @@ export default function CalendarPage() {
   const today = todayStr();
   const [cursor, setCursor] = useState(today);
   const [entries, setEntries] = useState<Map<string, DailyEntry>>(new Map());
+  const [themes, setThemes] = useState<Map<number, string>>(new Map());
   const [selected, setSelected] = useState<string | null>(null);
 
   const year = getYear(cursor);
@@ -39,6 +41,19 @@ export default function CalendarPage() {
       active = false;
     };
   }, [grid]);
+
+  useEffect(() => {
+    let active = true;
+    getThemes().then((m) => {
+      if (active) setThemes(m);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const themeSpans = useMemo(() => groupThemeSpans(themes), [themes]);
+  const hasTheme = useMemo(() => [...themes.values()].some((t) => t.trim() !== ''), [themes]);
 
   const selectedEntry = selected ? entries.get(selected) : undefined;
 
@@ -78,6 +93,21 @@ export default function CalendarPage() {
           </div>
         ))}
       </div>
+
+      {hasTheme && (
+        <div className="calendar-grid calendar-theme-band" aria-label="曜日テーマ">
+          {themeSpans.map((s) => (
+            <div
+              key={s.start}
+              className={'theme-band-cell' + (s.theme ? ' has-theme' : '')}
+              style={{ gridColumn: `span ${s.span}` }}
+              title={s.theme || undefined}
+            >
+              {s.theme && <span className="theme-band-cell__label">{s.theme}</span>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="calendar-grid">
         {grid.flat().map((d) => {

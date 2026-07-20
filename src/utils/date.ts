@@ -52,6 +52,14 @@ export function weekdayJa(dateStr: string): string {
   return WEEKDAY_JA[parseDate(dateStr).getDay()];
 }
 
+/**
+ * 曜日テーマ用の曜日インデックス（0=月..6=日）を返す。
+ * Date.getDay() は 0=日..6=土 なので (getDay + 6) % 7 で月曜始まりに変換する。
+ */
+export function themeWeekdayIndex(dateStr: string): number {
+  return (parseDate(dateStr).getDay() + 6) % 7;
+}
+
 /** "2026年7月15日（水）" 形式 */
 export function formatDisplay(dateStr: string): string {
   const d = parseDate(dateStr);

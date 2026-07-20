@@ -1,15 +1,23 @@
 import Dexie, { type Table } from 'dexie';
-import type { DailyEntry } from './types';
-import { pushEntry } from './lib/sync';
+import type { DailyEntry, WeekdayTheme } from './types';
+import { pushEntry, pushTheme } from './lib/sync';
 
 export class ExperienceCycleDB extends Dexie {
   entries!: Table<DailyEntry, string>;
+  themes!: Table<WeekdayTheme, number>;
 
   constructor() {
     super('experience_cycle');
+    // version(1): entries のみ。既存端末のデータ保持のため定義を残す。
     this.version(1).stores({
       // date が主キー。updatedAt でも検索できるようインデックス
       entries: '&date, updatedAt',
+    });
+    // version(2): 曜日テーマ用ストアを追加（weekday=0..6 が主キー）。
+    // entries は変更なし。既存データはそのまま引き継がれる。
+    this.version(2).stores({
+      entries: '&date, updatedAt',
+      themes: '&weekday',
     });
   }
 }
@@ -101,4 +109,45 @@ export async function getAllEntriesRaw(): Promise<DailyEntry[]> {
 export async function countEntries(): Promise<number> {
   const rows = await db.entries.toArray();
   return rows.filter((r) => !isEntryEmpty(r)).length;
+}
+
+// ---- 曜日テーマ ----
+
+/**
+ * 曜日→テーマ文字列の Map を返す（trim 後に空のものは除外＝未設定扱い）。
+ * 表示用。weekday は 0=月..6=日。
+ */
+export async function getThemes(): Promise<Map<number, string>> {
+  const rows = await db.themes.toArray();
+  const map = new Map<number, string>();
+  for (const r of rows) {
+    const t = r.theme.trim();
+    if (t !== '') map.set(r.weekday, t);
+  }
+  return map;
+}
+
+/**
+ * 全曜日テーマの生データ（空文字トンボストーン込み）。
+ * 同期のマージ用。表示には getThemes を使うこと。
+ */
+export async function getAllThemesRaw(): Promise<WeekdayTheme[]> {
+  const rows = await db.themes.toArray();
+  return rows.sort((a, b) => a.weekday - b.weekday);
+}
+
+/**
+ * 曜日テーマを保存する。theme は trim して put、updatedAt を更新する。
+ * 空文字も保存する（＝トンボストーン方式でクリアを同期伝播させる）。
+ * ログイン中ならクラウドへ write-through（失敗しても致命的でない）。
+ */
+export async function saveTheme(weekday: number, theme: string): Promise<void> {
+  const normalized: WeekdayTheme = {
+    weekday,
+    theme: theme.trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  await db.themes.put(normalized);
+  // ログイン中なら即時同期（fire-and-forget。失敗は次回 fullSync が自己修復）
+  void pushTheme(normalized);
 }

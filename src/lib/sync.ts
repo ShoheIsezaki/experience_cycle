@@ -1,5 +1,5 @@
-import type { DailyEntry, Weather } from '../types';
-import { db, getAllEntriesRaw } from '../db';
+import type { DailyEntry, Weather, WeekdayTheme } from '../types';
+import { db, getAllEntriesRaw, getAllThemesRaw } from '../db';
 import { mergeEntries } from '../utils/backup';
 import { supabase } from './supabase';
 
@@ -101,6 +101,74 @@ export function planSync(local: DailyEntry[], cloud: DailyEntry[]): SyncPlan {
   return { merged, toPush, pulled, pushed: toPush.length };
 }
 
+/** Supabase の public.weekday_themes テーブルの1行（snake_case カラム）。 */
+export interface ThemeRow {
+  user_id: string;
+  weekday: number;
+  theme: string;
+  updated_at: string;
+}
+
+/** WeekdayTheme → DB 行（純粋関数）。 */
+export function themeToRow(theme: WeekdayTheme, userId: string): ThemeRow {
+  return {
+    user_id: userId,
+    weekday: theme.weekday,
+    theme: theme.theme,
+    updated_at: theme.updatedAt,
+  };
+}
+
+/** DB 行 → WeekdayTheme（純粋関数）。updated_at は正規化。 */
+export function rowToTheme(row: ThemeRow): WeekdayTheme {
+  return {
+    weekday: row.weekday,
+    theme: row.theme ?? '',
+    updatedAt: normalizeIso(row.updated_at),
+  };
+}
+
+export interface ThemeSyncPlan {
+  /** マージ後のローカルへ書き込むべき全テーマ（空文字トンボストーン込み） */
+  merged: WeekdayTheme[];
+  /** クラウドへ upsert すべき（ローカルが新しい）テーマ */
+  toPush: WeekdayTheme[];
+  /** クラウドから取り込んで新しくなったローカル件数 */
+  pulled: number;
+  /** クラウドへ送信する件数（toPush.length と一致） */
+  pushed: number;
+}
+
+/**
+ * ローカル（raw）とクラウドの曜日テーマ集合から同期プランを計算する（純粋関数）。
+ * weekday をキーに entries の planSync と同じ LWW 判定を行う。
+ * 空文字テーマ（トンボストーン）も通常のテーマと同様に扱い、クリアを伝播させる。
+ */
+export function planThemeSync(local: WeekdayTheme[], cloud: WeekdayTheme[]): ThemeSyncPlan {
+  const cloudMap = new Map(cloud.map((t) => [t.weekday, t]));
+  const localMap = new Map(local.map((t) => [t.weekday, t]));
+
+  const mergedMap = new Map<number, WeekdayTheme>();
+  // 同値はローカル優先: 先にクラウド、後からローカルで上書き（>= で勝たせる）
+  for (const t of cloud) mergedMap.set(t.weekday, t);
+  for (const t of local) {
+    const cur = mergedMap.get(t.weekday);
+    if (!cur || t.updatedAt >= cur.updatedAt) mergedMap.set(t.weekday, t);
+  }
+  const merged = [...mergedMap.values()].sort((a, b) => a.weekday - b.weekday);
+
+  const toPush: WeekdayTheme[] = [];
+  let pulled = 0;
+  for (const t of merged) {
+    const c = cloudMap.get(t.weekday);
+    if (!c || t.updatedAt > c.updatedAt) toPush.push(t);
+    const l = localMap.get(t.weekday);
+    if (!l || t.updatedAt > l.updatedAt) pulled += 1;
+  }
+
+  return { merged, toPush, pulled, pushed: toPush.length };
+}
+
 /** 直近の fullSync 完了時刻（ISO）。UI 表示用。成功時のみ更新。 */
 let lastSyncedAt: string | null = null;
 export function getLastSyncedAt(): string | null {
@@ -151,8 +219,55 @@ async function doFullSync(userId: string): Promise<SyncResult | null> {
     if (upErr) throw upErr;
   }
 
+  // 曜日テーマも同じ fullSync で pull/merge/push する
+  const themePlan = await syncThemes(userId);
+
   lastSyncedAt = new Date().toISOString();
-  return { pulled: plan.pulled, pushed: plan.pushed };
+  return {
+    pulled: plan.pulled + themePlan.pulled,
+    pushed: plan.pushed + themePlan.pushed,
+  };
+}
+
+/** weekday_themes テーブル未作成（schema.sql 未実行）を示すエラーか。 */
+function isMissingThemeTable(err: { code?: string }): boolean {
+  // 42P01: Postgres undefined_table / PGRST205: PostgREST schema cache に無い
+  return err.code === '42P01' || err.code === 'PGRST205';
+}
+
+/** 曜日テーマの pull → LWW マージ → bulkPut → 差分 push（doFullSync 内から呼ぶ）。 */
+async function syncThemes(userId: string): Promise<ThemeSyncPlan> {
+  if (!supabase) return { merged: [], toPush: [], pulled: 0, pushed: 0 };
+
+  const { data, error } = await supabase
+    .from('weekday_themes')
+    .select('*')
+    .eq('user_id', userId);
+  if (error) {
+    // テーブル未作成（schema.sql の再実行前）はテーマ同期のみスキップし、
+    // 記録（entries）の同期まで失敗扱いにしない
+    if (isMissingThemeTable(error)) {
+      console.warn('weekday_themes テーブルが未作成のためテーマ同期をスキップしました。supabase/schema.sql を実行してください。');
+      return { merged: [], toPush: [], pulled: 0, pushed: 0 };
+    }
+    throw error;
+  }
+
+  const cloud = (data as ThemeRow[]).map(rowToTheme);
+  const local = await getAllThemesRaw();
+  const plan = planThemeSync(local, cloud);
+
+  await db.themes.bulkPut(plan.merged);
+
+  if (plan.toPush.length > 0) {
+    const rows = plan.toPush.map((t) => themeToRow(t, userId));
+    const { error: upErr } = await supabase
+      .from('weekday_themes')
+      .upsert(rows, { onConflict: 'user_id,weekday' });
+    if (upErr) throw upErr;
+  }
+
+  return plan;
 }
 
 /**
@@ -169,6 +284,26 @@ export async function pushEntry(entry: DailyEntry): Promise<boolean> {
     const { error } = await supabase
       .from('entries')
       .upsert(entryToRow(entry, userId), { onConflict: 'user_id,date' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * ログイン中の曜日テーマ書き込みをクラウドへ即時 upsert（write-through）。
+ * 未設定・未ログイン・失敗時は throw せず false を返す
+ * （次回 fullSync が自己修復するため致命的ではない）。
+ */
+export async function pushTheme(theme: WeekdayTheme): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user?.id;
+    if (!userId) return false;
+    const { error } = await supabase
+      .from('weekday_themes')
+      .upsert(themeToRow(theme, userId), { onConflict: 'user_id,weekday' });
     return !error;
   } catch {
     return false;

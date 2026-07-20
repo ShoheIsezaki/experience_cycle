@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import WeatherPicker from '../components/WeatherPicker';
 import { STEPS, type StepField } from '../steps';
-import { emptyEntry, getEntry, saveEntry } from '../db';
+import { emptyEntry, getEntry, getThemes, saveEntry } from '../db';
 import type { DailyEntry, Weather } from '../types';
-import { addDays, formatDisplay, todayStr } from '../utils/date';
+import { addDays, formatDisplay, themeWeekdayIndex, todayStr } from '../utils/date';
 
 type SaveStatus = 'idle' | 'saving' | 'saved';
 
@@ -17,6 +17,7 @@ export default function RecordPage() {
   const [entry, setEntry] = useState<DailyEntry>(() => emptyEntry(date));
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [loaded, setLoaded] = useState(false);
+  const [dayTheme, setDayTheme] = useState<string>('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -32,6 +33,17 @@ export default function RecordPage() {
       setEntry(existing ?? emptyEntry(date));
       setStatus('idle');
       setLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [date]);
+
+  // その日の曜日テーマを読み込む（設定変更後に戻ってきた場合も反映）
+  useEffect(() => {
+    let active = true;
+    getThemes().then((themes) => {
+      if (active) setDayTheme(themes.get(themeWeekdayIndex(date)) ?? '');
     });
     return () => {
       active = false;
@@ -143,6 +155,12 @@ export default function RecordPage() {
           </button>
         </div>
       </header>
+
+      {dayTheme && (
+        <p className="record-theme">
+          🎯 「{dayTheme}」についての振り返り
+        </p>
+      )}
 
       <section className="record-weather">
         <p className="section-label">今日の学習状態</p>

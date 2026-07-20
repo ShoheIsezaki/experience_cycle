@@ -9,6 +9,7 @@ import {
   getWeekDays,
   getWeekStart,
   parseDate,
+  themeWeekdayIndex,
   weekdayJa,
 } from './date';
 
@@ -84,6 +85,22 @@ describe('weekdayJa', () => {
     expect(weekdayJa('2026-07-15')).toBe('水');
     expect(weekdayJa('2026-07-13')).toBe('月');
     expect(weekdayJa('2026-07-19')).toBe('日');
+  });
+});
+
+describe('themeWeekdayIndex (0=Mon..6=Sun)', () => {
+  it('maps dates to a Monday-start weekday index', () => {
+    expect(themeWeekdayIndex('2026-07-13')).toBe(0); // Mon
+    expect(themeWeekdayIndex('2026-07-15')).toBe(2); // Wed
+    expect(themeWeekdayIndex('2026-07-18')).toBe(5); // Sat
+    expect(themeWeekdayIndex('2026-07-19')).toBe(6); // Sun
+  });
+
+  it('covers a full week 0..6 in order', () => {
+    const indices = Array.from({ length: 7 }, (_, i) =>
+      themeWeekdayIndex(addDays('2026-07-13', i)),
+    );
+    expect(indices).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 });
 

@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { countEntries, db, emptyEntry, getAllEntries, getAllEntriesRaw, isEntryEmpty } from '../db';
+import {
+  countEntries,
+  db,
+  emptyEntry,
+  getAllEntries,
+  getAllEntriesRaw,
+  getThemes,
+  isEntryEmpty,
+  saveTheme,
+} from '../db';
 import { mergeEntries, parseBackup, serializeBackup, type MergeStrategy } from '../utils/backup';
 import { todayStr } from '../utils/date';
 import type { DailyEntry } from '../types';
@@ -114,6 +123,93 @@ function AccountSection() {
   );
 }
 
+const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
+
+function ThemeSection() {
+  const [values, setValues] = useState<string[]>(() => Array(7).fill(''));
+  const [saved, setSaved] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const timersRef = useRef<Array<ReturnType<typeof setTimeout> | null>>(Array(7).fill(null));
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // デバウンス待ちの未保存値（weekday→入力値）。保存確定で削除する
+  const pendingRef = useRef<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+    getThemes().then((m) => {
+      if (!active) return;
+      setValues(Array.from({ length: 7 }, (_, wd) => m.get(wd) ?? ''));
+      setLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // アンマウント時・アプリ終了（pagehide）時に保留中の保存を確定する
+  useEffect(() => {
+    const flushPending = () => {
+      timersRef.current.forEach((t) => t && clearTimeout(t));
+      timersRef.current = Array(7).fill(null);
+      for (const [wd, value] of pendingRef.current) {
+        void saveTheme(wd, value);
+      }
+      pendingRef.current.clear();
+    };
+    window.addEventListener('pagehide', flushPending);
+    return () => {
+      window.removeEventListener('pagehide', flushPending);
+      flushPending();
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  const handleChange = (weekday: number, value: string) => {
+    setValues((prev) => {
+      const next = [...prev];
+      next[weekday] = value;
+      return next;
+    });
+    pendingRef.current.set(weekday, value);
+    const timers = timersRef.current;
+    if (timers[weekday]) clearTimeout(timers[weekday] as ReturnType<typeof setTimeout>);
+    timers[weekday] = setTimeout(() => {
+      pendingRef.current.delete(weekday);
+      void saveTheme(weekday, value).then(() => {
+        setSaved(true);
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => setSaved(false), 1800);
+      });
+    }, 500);
+  };
+
+  return (
+    <section className="settings-section">
+      <h2 className="settings-section__title">曜日テーマ</h2>
+      <p className="settings-desc">
+        曜日ごとに意識するテーマを設定すると、記録画面とカレンダーに表示されます。
+      </p>
+      <div className="theme-editor" aria-busy={!loaded}>
+        {WEEKDAY_LABELS.map((label, wd) => (
+          <label key={wd} className="theme-editor__row">
+            <span className="theme-editor__label">{label}</span>
+            <input
+              type="text"
+              className="theme-editor__input"
+              value={values[wd]}
+              placeholder="例: 傾聴、仕組み化 など"
+              onChange={(e) => handleChange(wd, e.target.value)}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="save-status" role="status" aria-live="polite">
+        {saved && <span className="save-status__saved">✓ 保存しました</span>}
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   const [count, setCount] = useState<number | null>(null);
   const [message, setMessage] = useState<string>('');
@@ -204,6 +300,8 @@ export default function SettingsPage() {
       </header>
 
       <AccountSection />
+
+      <ThemeSection />
 
       <section className="settings-section">
         <h2 className="settings-section__title">データ</h2>
