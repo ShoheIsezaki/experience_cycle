@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getEntriesForDates } from '../db';
-import type { DailyEntry } from '../types';
+import { getAllItemsRaw, getChecksForDates, getEntriesForDates } from '../db';
+import type { ChecklistCheck, ChecklistItem, DailyEntry } from '../types';
 import { WEATHER_OPTIONS } from '../types';
 import { STEPS } from '../steps';
+import { dayProgress } from '../utils/checklist';
 import {
   addDays,
   formatShort,
@@ -28,6 +29,8 @@ export default function WeekPage() {
   const today = todayStr();
   const [cursor, setCursor] = useState(today);
   const [entries, setEntries] = useState<Map<string, DailyEntry>>(new Map());
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [checks, setChecks] = useState<ChecklistCheck[]>([]);
   const navigate = useNavigate();
 
   const days = useMemo(() => getWeekDays(cursor), [cursor]);
@@ -36,6 +39,12 @@ export default function WeekPage() {
     let active = true;
     getEntriesForDates(days).then((m) => {
       if (active) setEntries(m);
+    });
+    Promise.all([getAllItemsRaw(), getChecksForDates(days)]).then(([its, cks]) => {
+      if (active) {
+        setItems(its);
+        setChecks(cks);
+      }
     });
     return () => {
       active = false;
@@ -79,6 +88,15 @@ export default function WeekPage() {
           const entry = entries.get(d);
           const isToday = d === today;
           const hasContent = !!entry;
+          const prog = dayProgress(items, checks, d);
+          const progClass =
+            prog.total === 0
+              ? ''
+              : prog.done >= prog.total
+                ? ' is-full'
+                : prog.done > 0
+                  ? ' is-part'
+                  : ' is-zero';
           return (
             <li key={d}>
               <button
@@ -90,8 +108,15 @@ export default function WeekPage() {
               >
                 <div className="week-day__head">
                   <span className="week-day__date">{formatShort(d)}</span>
-                  <span className="week-day__weather" aria-hidden="true">
-                    {weatherEmoji(entry?.weather)}
+                  <span className="week-day__head-right">
+                    {prog.total > 0 && (
+                      <span className={'day-badge' + progClass}>
+                        {prog.done}/{prog.total}
+                      </span>
+                    )}
+                    <span className="week-day__weather" aria-hidden="true">
+                      {weatherEmoji(entry?.weather)}
+                    </span>
                   </span>
                 </div>
                 {entry ? (

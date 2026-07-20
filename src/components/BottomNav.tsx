@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 const TABS = [
   { to: '/record', label: '記録', icon: '✍️' },
+  { to: '/check', label: 'チェック', icon: '✅' },
   { to: '/calendar', label: 'カレンダー', icon: '📅' },
   { to: '/week', label: '週', icon: '🗓️' },
   { to: '/settings', label: '設定', icon: '⚙️' },

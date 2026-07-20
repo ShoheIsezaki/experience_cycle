@@ -34,6 +34,51 @@ export interface WeekdayTheme {
   updatedAt: string;
 }
 
+/**
+ * デイリーチェックリストのタスク定義。
+ * 削除は物理削除せず archived=true + archivedOn でアーカイブ（履歴保持）。
+ */
+export interface ChecklistItem {
+  /** crypto.randomUUID()。主キー */
+  id: string;
+  /** タスク名（必須） */
+  name: string;
+  /** 参考リンク（任意。'' 可） */
+  url: string;
+  /** メモ（改行可・最大1000字はUIで制御。'' 可） */
+  memo: string;
+  /** 目安の時間 "HH:MM"。'' 可 */
+  time: string;
+  /** オンにする曜日（0=月..6=日）の配列 */
+  weekdays: number[];
+  /** アーカイブ済み（削除）フラグ */
+  archived: boolean;
+  /** 作成日 "YYYY-MM-DD"（ローカル）。この日以降が対象 */
+  createdOn: string;
+  /** アーカイブした日 "YYYY-MM-DD"。null=未アーカイブ。この日以降は非対象 */
+  archivedOn: string | null;
+  /** 最終更新時刻（ISO文字列） */
+  updatedAt: string;
+}
+
+/**
+ * チェックリストの1タスク×1日のチェック状態。
+ * itemId+date を複合キーとする。checked=false 行はトンボストーン。
+ */
+export interface ChecklistCheck {
+  /** 対象タスクの id */
+  itemId: string;
+  /** "YYYY-MM-DD"（ローカル） */
+  date: string;
+  /** チェック済みか。false=解除（トンボストーン） */
+  checked: boolean;
+  /** 最終更新時刻（ISO文字列） */
+  updatedAt: string;
+}
+
+/** 曜日の短縮ラベル（0=月..6=日）。UIの曜日チップ・ヘッダーで共用。 */
+export const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'] as const;
+
 export const WEATHER_OPTIONS: { value: Weather; emoji: string; label: string }[] = [
   { value: 1, emoji: '☀️', label: '快晴' },
   { value: 2, emoji: '🌤', label: '晴れ' },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getEntriesForDates, getThemes } from '../db';
-import type { DailyEntry } from '../types';
+import { getAllItemsRaw, getChecksForDates, getEntriesForDates, getThemes } from '../db';
+import type { ChecklistCheck, ChecklistItem, DailyEntry } from '../types';
 import { WEATHER_OPTIONS } from '../types';
 import {
   addMonths,
@@ -11,6 +11,7 @@ import {
   todayStr,
 } from '../utils/date';
 import { groupThemeSpans } from '../utils/theme';
+import { dayProgress } from '../utils/checklist';
 import EntrySheet from '../components/EntrySheet';
 
 const WEEK_HEADERS = ['月', '火', '水', '木', '金', '土', '日'];
@@ -25,6 +26,8 @@ export default function CalendarPage() {
   const [cursor, setCursor] = useState(today);
   const [entries, setEntries] = useState<Map<string, DailyEntry>>(new Map());
   const [themes, setThemes] = useState<Map<number, string>>(new Map());
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [checks, setChecks] = useState<ChecklistCheck[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
 
   const year = getYear(cursor);
@@ -36,6 +39,12 @@ export default function CalendarPage() {
     let active = true;
     getEntriesForDates(dates).then((m) => {
       if (active) setEntries(m);
+    });
+    Promise.all([getAllItemsRaw(), getChecksForDates(dates)]).then(([its, cks]) => {
+      if (active) {
+        setItems(its);
+        setChecks(cks);
+      }
     });
     return () => {
       active = false;
@@ -115,6 +124,15 @@ export default function CalendarPage() {
           const entry = entries.get(d);
           const isToday = d === today;
           const dayNum = Number(d.slice(8, 10));
+          const prog = dayProgress(items, checks, d);
+          const progClass =
+            prog.total === 0
+              ? ''
+              : prog.done >= prog.total
+                ? ' is-full'
+                : prog.done > 0
+                  ? ' is-part'
+                  : ' is-zero';
           return (
             <button
               key={d}
@@ -131,6 +149,11 @@ export default function CalendarPage() {
               <span className="calendar-cell__weather" aria-hidden="true">
                 {weatherEmoji(entry?.weather)}
               </span>
+              {prog.total > 0 && (
+                <span className={'calendar-cell__prog' + progClass}>
+                  {prog.done}/{prog.total}
+                </span>
+              )}
             </button>
           );
         })}
@@ -140,6 +163,8 @@ export default function CalendarPage() {
         <EntrySheet
           date={selected}
           entry={selectedEntry}
+          items={items}
+          checks={checks}
           onClose={() => setSelected(null)}
         />
       )}

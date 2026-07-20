@@ -27,8 +27,10 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI',
-    sans-serif;
+  /* 日本語グリフを優先し、中国語フォントへのフォールバックで
+     中華風グリフになるのを防ぐ（Hiragino / Noto Sans JP / Yu Gothic 等を明示）。 */
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP', 'Yu Gothic UI', Meiryo, sans-serif;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -788,6 +790,503 @@ button {
   flex-direction: column;
 }
 
+/* ---- checklist: progress card ---- */
+.progress-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, #4f7cff, #6c5ce7);
+  border-radius: 18px;
+  padding: 14px 16px;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.progress-card__ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.progress-card__ring-inner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #5a79f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.progress-card__txt {
+  min-width: 0;
+}
+
+.progress-card__txt b {
+  font-size: 15px;
+  display: block;
+}
+
+.progress-card__txt span {
+  font-size: 12px;
+  opacity: 0.9;
+  display: block;
+  margin-top: 2px;
+}
+
+/* ---- checklist: task list ---- */
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  transition: opacity 0.15s ease;
+}
+
+.task.is-done {
+  opacity: 0.6;
+}
+
+.task__check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #c5cbe3;
+  background: transparent;
+  flex: none;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  padding: 0;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.task__check:active {
+  transform: scale(0.88);
+}
+
+.task__check.is-on {
+  background: #34c759;
+  border-color: #34c759;
+}
+
+.task__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.task__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.task.is-done .task__name {
+  text-decoration: line-through;
+}
+
+.task__meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  text-decoration: none;
+  display: inline-block;
+}
+
+.chip--time {
+  background: #e8f0ff;
+  color: #3565e0;
+}
+
+.chip--link {
+  color: #3565e0;
+  background: #eef1fb;
+}
+
+.task__memo {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 6px 0 0;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  cursor: pointer;
+}
+
+.task__memo.is-open {
+  -webkit-line-clamp: unset;
+  display: block;
+}
+
+.edit-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  background: transparent;
+  border: none;
+  padding: 14px 0 2px;
+  margin-top: 4px;
+}
+
+.check-empty {
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.check-empty__msg {
+  color: var(--text-muted);
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+
+.check-empty__add {
+  border: 1px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 12px;
+  padding: 10px 18px;
+}
+
+/* ---- achievement badge (calendar / week) ---- */
+.calendar-cell__prog,
+.day-badge {
+  font-size: 9px;
+  font-weight: 800;
+  border-radius: 6px;
+  padding: 1px 4px;
+  display: inline-block;
+  line-height: 1.3;
+}
+
+.day-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.calendar-cell__prog {
+  margin-top: 1px;
+}
+
+.calendar-cell__prog.is-full,
+.day-badge.is-full {
+  color: #1d9d4e;
+  background: #e3f7ea;
+}
+
+.calendar-cell__prog.is-part,
+.day-badge.is-part {
+  color: #c07a12;
+  background: #fdf1dc;
+}
+
+.calendar-cell__prog.is-zero,
+.day-badge.is-zero {
+  color: #98a0ba;
+  background: #eef0f7;
+}
+
+.week-day__head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- checklist: edit form ---- */
+.date-nav__btn--spacer {
+  background: transparent;
+  border-color: transparent;
+  pointer-events: none;
+}
+
+.form-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.form-field__req {
+  color: var(--danger);
+}
+
+.form-field__input,
+.form-field__textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.form-field__textarea {
+  resize: vertical;
+  min-height: 88px;
+  line-height: 1.6;
+}
+
+.form-field__input:focus,
+.form-field__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.form-field__hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.form-field__counter {
+  text-align: right;
+  font-size: 10px;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.weekday-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.weekday-chip {
+  flex: 1;
+  aspect-ratio: 1 / 1;
+  max-width: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+
+.weekday-chip:active {
+  transform: scale(0.9);
+}
+
+.weekday-chip.is-on {
+  background: var(--primary);
+  color: #fff;
+}
+
+.weekday-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.weekday-preset {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  background: #e8f0ff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 99px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.form-btn {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.form-btn--primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.form-btn--danger {
+  background: var(--surface-2);
+  color: var(--danger);
+}
+
+/* ---- checklist: manage list ---- */
+.manage-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manage-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.manage-item__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.manage-item__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.manage-item__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manage-item__days {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.manage-item__chevron {
+  font-size: 22px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.manage-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-size: 14px;
+}
+
+.manage-add {
+  display: block;
+  width: 100%;
+  height: 50px;
+  border: 1px dashed var(--primary);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ---- checklist: entry sheet breakdown ---- */
+.sheet__checklist {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.sheet__check-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sheet__check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.sheet__check-mark {
+  width: 20px;
+  text-align: center;
+  color: var(--text-faint);
+  font-weight: 800;
+}
+
+.sheet__check-row.is-done .sheet__check-mark {
+  color: #1d9d4e;
+}
+
+.sheet__check-row.is-done .sheet__check-name {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
 /* ---- dark mode ---- */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -820,5 +1319,45 @@ button {
 
   .calendar-cell.has-entry {
     border-color: #3a4a7a;
+  }
+
+  .chip--time {
+    background: #26325a;
+    color: #a9c2ff;
+  }
+
+  .chip--link {
+    background: #2a3350;
+    color: #a9c2ff;
+  }
+
+  .weekday-preset {
+    background: #26325a;
+  }
+
+  .form-btn--danger {
+    color: #ffb4ab;
+  }
+
+  .check-empty__add {
+    border-color: var(--primary);
+  }
+
+  .calendar-cell__prog.is-full,
+  .day-badge.is-full {
+    color: #7ee2a3;
+    background: #17301f;
+  }
+
+  .calendar-cell__prog.is-part,
+  .day-badge.is-part {
+    color: #f0c07a;
+    background: #3a2e14;
+  }
+
+  .calendar-cell__prog.is-zero,
+  .day-badge.is-zero {
+    color: #98a0ba;
+    background: #262b35;
   }
 }

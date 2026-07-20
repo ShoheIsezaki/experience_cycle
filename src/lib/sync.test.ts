@@ -7,10 +7,18 @@ import {
   themeToRow,
   rowToTheme,
   planThemeSync,
+  itemToRow,
+  rowToItem,
+  planItemSync,
+  checkToRow,
+  rowToCheck,
+  planCheckSync,
   type EntryRow,
   type ThemeRow,
+  type ItemRow,
+  type CheckRow,
 } from './sync';
-import type { DailyEntry, WeekdayTheme } from '../types';
+import type { ChecklistCheck, ChecklistItem, DailyEntry, WeekdayTheme } from '../types';
 
 function entry(over: Partial<DailyEntry> & { date: string }): DailyEntry {
   return {
@@ -239,5 +247,157 @@ describe('planThemeSync', () => {
     expect(plan.merged[0].theme).toBe('');
     expect(plan.toPush).toHaveLength(1);
     expect(plan.toPush[0].theme).toBe('');
+  });
+});
+
+function citem(over: Partial<ChecklistItem> & { id: string }): ChecklistItem {
+  return {
+    name: 'task',
+    url: '',
+    memo: '',
+    time: '',
+    weekdays: [0, 1, 2, 3, 4],
+    archived: false,
+    createdOn: '2026-07-01',
+    archivedOn: null,
+    updatedAt: '2026-07-15T00:00:00.000Z',
+    ...over,
+  };
+}
+
+describe('itemToRow / rowToItem round trip', () => {
+  it('maps fields and keeps weekdays array', () => {
+    const it = citem({
+      id: 'x1',
+      name: '英語',
+      url: 'https://example.com',
+      memo: 'メモ\n改行',
+      time: '07:30',
+      weekdays: [0, 2, 4],
+      updatedAt: '2026-07-15T10:00:00.000Z',
+    });
+    const row = itemToRow(it, 'user-1');
+    expect(row.user_id).toBe('user-1');
+    expect(row.created_on).toBe('2026-07-01');
+    expect(row.archived_on).toBeNull();
+    expect(row.weekdays).toEqual([0, 2, 4]);
+    expect(rowToItem(row)).toEqual(it);
+  });
+
+  it('normalizes Postgres updated_at so a pushed item round-trips as identical', () => {
+    const local = citem({ id: 'x', updatedAt: '2026-07-15T10:00:00.123Z' });
+    const row: ItemRow = {
+      ...itemToRow(local, 'u'),
+      updated_at: '2026-07-15T10:00:00.123000+00:00',
+    };
+    const cloud = rowToItem(row);
+    expect(cloud.updatedAt).toBe(local.updatedAt);
+    const plan = planItemSync([local], [cloud]);
+    expect(plan.toPush).toHaveLength(0);
+    expect(plan.pulled).toBe(0);
+  });
+
+  it('defaults a missing weekdays array to empty', () => {
+    const row = { ...itemToRow(citem({ id: 'y' }), 'u'), weekdays: null } as unknown as ItemRow;
+    expect(rowToItem(row).weekdays).toEqual([]);
+  });
+});
+
+describe('planItemSync', () => {
+  it('pulls cloud items missing locally', () => {
+    const cloud = [citem({ id: 'a' })];
+    const plan = planItemSync([], cloud);
+    expect(plan.merged.map((i) => i.id)).toEqual(['a']);
+    expect(plan.pulled).toBe(1);
+    expect(plan.toPush).toHaveLength(0);
+  });
+
+  it('pushes local items missing in cloud', () => {
+    const local = [citem({ id: 'b' })];
+    const plan = planItemSync(local, []);
+    expect(plan.toPush.map((i) => i.id)).toEqual(['b']);
+    expect(plan.pushed).toBe(1);
+  });
+
+  it('keeps the newer side per id (LWW)', () => {
+    const local = [citem({ id: 'a', name: 'local-new', updatedAt: '2026-07-14T12:00:00.000Z' })];
+    const cloud = [citem({ id: 'a', name: 'cloud-old', updatedAt: '2026-07-14T00:00:00.000Z' })];
+    const plan = planItemSync(local, cloud);
+    expect(plan.merged[0].name).toBe('local-new');
+    expect(plan.toPush).toHaveLength(1);
+    expect(plan.pulled).toBe(0);
+  });
+
+  it('propagates an archive (delete) as a push when local is newer', () => {
+    const local = [citem({ id: 'a', archived: true, archivedOn: '2026-07-15', updatedAt: '2026-07-15T12:00:00.000Z' })];
+    const cloud = [citem({ id: 'a', archived: false, updatedAt: '2026-07-15T00:00:00.000Z' })];
+    const plan = planItemSync(local, cloud);
+    expect(plan.merged[0].archived).toBe(true);
+    expect(plan.toPush).toHaveLength(1);
+    expect(plan.toPush[0].archived).toBe(true);
+  });
+
+  it('does nothing when identical', () => {
+    const same = citem({ id: 'a', updatedAt: '2026-07-14T00:00:00.000Z' });
+    const plan = planItemSync([same], [{ ...same }]);
+    expect(plan.toPush).toHaveLength(0);
+    expect(plan.pulled).toBe(0);
+  });
+});
+
+function ccheck(over: Partial<ChecklistCheck> & { itemId: string; date: string }): ChecklistCheck {
+  return { checked: true, updatedAt: '2026-07-15T00:00:00.000Z', ...over };
+}
+
+describe('checkToRow / rowToCheck round trip', () => {
+  it('maps fields', () => {
+    const c = ccheck({ itemId: 'x', date: '2026-07-20', updatedAt: '2026-07-20T09:00:00.000Z' });
+    const row = checkToRow(c, 'user-1');
+    expect(row.user_id).toBe('user-1');
+    expect(row.item_id).toBe('x');
+    expect(row.date).toBe('2026-07-20');
+    expect(row.checked).toBe(true);
+    expect(rowToCheck(row)).toEqual(c);
+  });
+
+  it('normalizes Postgres updated_at so a pushed check round-trips as identical', () => {
+    const local = ccheck({ itemId: 'x', date: '2026-07-20', updatedAt: '2026-07-20T09:00:00.123Z' });
+    const row: CheckRow = {
+      ...checkToRow(local, 'u'),
+      updated_at: '2026-07-20T09:00:00.123000+00:00',
+    };
+    const cloud = rowToCheck(row);
+    expect(cloud.updatedAt).toBe(local.updatedAt);
+    const plan = planCheckSync([local], [cloud]);
+    expect(plan.toPush).toHaveLength(0);
+    expect(plan.pulled).toBe(0);
+  });
+});
+
+describe('planCheckSync', () => {
+  it('uses itemId+date as the composite key', () => {
+    const local = [ccheck({ itemId: 'a', date: '2026-07-20' })];
+    const cloud = [ccheck({ itemId: 'a', date: '2026-07-19' })];
+    const plan = planCheckSync(local, cloud);
+    // 別キーなので両方 merged に残る
+    expect(plan.merged).toHaveLength(2);
+    expect(plan.toPush.map((c) => c.date)).toEqual(['2026-07-20']);
+    expect(plan.pulled).toBe(1);
+  });
+
+  it('keeps the newer side per composite key (LWW)', () => {
+    const local = [ccheck({ itemId: 'a', date: '2026-07-20', checked: true, updatedAt: '2026-07-20T12:00:00.000Z' })];
+    const cloud = [ccheck({ itemId: 'a', date: '2026-07-20', checked: false, updatedAt: '2026-07-20T00:00:00.000Z' })];
+    const plan = planCheckSync(local, cloud);
+    expect(plan.merged[0].checked).toBe(true);
+    expect(plan.toPush).toHaveLength(1);
+  });
+
+  it('propagates an uncheck (checked=false) tombstone when local is newer', () => {
+    const local = [ccheck({ itemId: 'a', date: '2026-07-20', checked: false, updatedAt: '2026-07-20T12:00:00.000Z' })];
+    const cloud = [ccheck({ itemId: 'a', date: '2026-07-20', checked: true, updatedAt: '2026-07-20T00:00:00.000Z' })];
+    const plan = planCheckSync(local, cloud);
+    expect(plan.merged[0].checked).toBe(false);
+    expect(plan.toPush[0].checked).toBe(false);
   });
 });

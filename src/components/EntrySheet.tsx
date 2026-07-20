@@ -1,21 +1,26 @@
 import { useNavigate } from 'react-router-dom';
-import type { DailyEntry } from '../types';
+import type { ChecklistCheck, ChecklistItem, DailyEntry } from '../types';
 import { WEATHER_OPTIONS } from '../types';
 import { STEPS } from '../steps';
 import { formatDisplay } from '../utils/date';
+import { activeItemsOn, isChecked } from '../utils/checklist';
 
 interface Props {
   date: string;
   entry: DailyEntry | undefined;
+  items: ChecklistItem[];
+  checks: ChecklistCheck[];
   onClose: () => void;
 }
 
 /** カレンダーから日をタップした時に開く下部シート。内容表示＋編集導線。 */
-export default function EntrySheet({ date, entry, onClose }: Props) {
+export default function EntrySheet({ date, entry, items, checks, onClose }: Props) {
   const navigate = useNavigate();
   const weather = entry?.weather
     ? WEATHER_OPTIONS.find((o) => o.value === entry.weather)
     : undefined;
+
+  const dayItems = activeItemsOn(items, date);
 
   const goEdit = () => navigate(`/record/${date}`);
 
@@ -62,6 +67,28 @@ export default function EntrySheet({ date, entry, onClose }: Props) {
                 </div>
               );
             })
+          )}
+
+          {dayItems.length > 0 && (
+            <div className="sheet__checklist">
+              <p className="sheet__item-title">✅ チェック</p>
+              <ul className="sheet__check-list">
+                {dayItems.map((it) => {
+                  const done = isChecked(checks, it.id, date);
+                  return (
+                    <li
+                      key={it.id}
+                      className={'sheet__check-row' + (done ? ' is-done' : '')}
+                    >
+                      <span className="sheet__check-mark" aria-hidden="true">
+                        {done ? '✓' : '○'}
+                      </span>
+                      <span className="sheet__check-name">{it.name}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </div>
 

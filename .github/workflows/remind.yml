@@ -13,6 +13,8 @@ jobs:
       - name: Send Discord reminder
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "DISCORD_WEBHOOK_URL is not set. Skipping reminder."
@@ -20,6 +22,49 @@ jobs:
           fi
 
           MESSAGE=$'📘 **今日の経験学習サイクルを記録しましょう**\n今日やったこと・気づき・次の一歩を振り返る時間です。\nhttps://shoheisezaki.github.io/experience_cycle/'
+
+          # Supabase が設定されていれば「今日のチェック: done/total」を1行追加する。
+          # 取得や集計に失敗しても従来メッセージは必ず送る（通知自体は失敗させない）。
+          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -n "$SUPABASE_URL" ]; then
+            TODAY=$(TZ=Asia/Tokyo date +%F)          # YYYY-MM-DD
+            DOW=$(TZ=Asia/Tokyo date +%u)            # 1=月..7=日
+            WD=$((DOW - 1))                          # 0=月..6=日
+
+            ITEMS=$(curl -sS \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/rest/v1/checklist_items?archived=eq.false&select=id,weekdays,created_on,archived_on" \
+              || echo "")
+
+            CHECKS=$(curl -sS \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/rest/v1/checklist_checks?date=eq.$TODAY&checked=eq.true&select=item_id" \
+              || echo "")
+
+            # 今日対象のタスク（weekday一致 && created_on<=today && (archived_on==null || today<archived_on)）を
+            # 抽出し total を数え、そのうち checked=true の item_id を持つものを done とする。
+            PROGRESS=$(jq -rn \
+              --argjson items "${ITEMS:-[]}" \
+              --argjson checks "${CHECKS:-[]}" \
+              --arg today "$TODAY" \
+              --argjson wd "$WD" '
+              ($checks | map(.item_id)) as $done_ids
+              | ($items
+                  | map(select(
+                      ((.weekdays // []) | index($wd) != null)
+                      and (.created_on <= $today)
+                      and (.archived_on == null or ($today < .archived_on))
+                    ))) as $active
+              | ($active | length) as $total
+              | ($active | map(select(.id as $id | $done_ids | index($id) != null)) | length) as $done
+              | if $total > 0 then "\($done)/\($total)" else "" end
+            ' 2>/dev/null || echo "")
+
+            if [ -n "$PROGRESS" ]; then
+              MESSAGE="${MESSAGE}"$'\n'"✅ 今日のチェック: ${PROGRESS}"
+            fi
+          fi
 
           # jq でJSONを安全に組み立てて送信
           PAYLOAD=$(jq -n --arg content "$MESSAGE" '{content: $content}')
