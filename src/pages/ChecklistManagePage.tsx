@@ -139,6 +139,24 @@ export default function ChecklistManagePage() {
     closeForm();
   };
 
+  // 既存タスクを元に未保存のコピーを作り、新規作成モードに切り替える。
+  // 保存するまでDBには書き込まれない（時刻だけ変えて保存する使い方を想定）。
+  const duplicate = () => {
+    if (!draft || isNew) return;
+    const copy: Draft = {
+      ...draft,
+      id: crypto.randomUUID(),
+      createdOn: today,
+      archived: false,
+      archivedOn: null,
+      updatedAt: '',
+    };
+    setDraft(copy);
+    // 比較元を空の新規ドラフトにして、保存せず戻る際は必ず破棄confirmを出す
+    setOriginal(newDraft(today));
+    setIsNew(true);
+  };
+
   const toggleWeekday = (wd: number) => {
     setDraft((prev) => {
       if (!prev) return prev;
@@ -254,6 +272,12 @@ export default function ChecklistManagePage() {
               {draft.memo.length} / {MEMO_MAX}
             </p>
           </div>
+
+          {!isNew && (
+            <button type="button" className="form-btn form-btn--copy" onClick={duplicate}>
+              ⧉ コピーして新規作成
+            </button>
+          )}
 
           <div className="form-actions">
             {!isNew && (

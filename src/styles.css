@@ -1175,6 +1175,14 @@ button {
   color: var(--danger);
 }
 
+/* コピーして新規作成（フォーム下部の全幅セカンダリボタン） */
+.form-btn--copy {
+  width: 100%;
+  background: var(--surface-2);
+  color: var(--primary);
+  margin-top: 4px;
+}
+
 /* ---- checklist: manage list ---- */
 .manage-list {
   list-style: none;
